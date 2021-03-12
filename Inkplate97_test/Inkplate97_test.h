@@ -33,6 +33,7 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 #include "driver/periph_ctrl.h"
 #include "soc/rtc.h"
 #include "soc/soc.h"
+#include "rom/lldesc.h"
 
 #define MCP23017_INT_ADDR		0x20
 #define MCP23017_EXT_ADDR		0x22
@@ -131,6 +132,11 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 
 extern SPIClass spi2;
 extern SdFat sd;
+static void IRAM_ATTR sendData();
+static volatile uint8_t *b;
+static volatile uint8_t *c;
+static volatile lldesc_s* test;
+static i2s_dev_t *myI2S = &I2S1;
 
 class Inkplate : public Adafruit_GFX {
   public:
@@ -205,7 +211,6 @@ class Inkplate : public Adafruit_GFX {
 	uint16_t getPorts();
 
   private:
-  portMUX_TYPE myMutex = portMUX_INITIALIZER_UNLOCKED;
 	uint8_t mcpRegsInt[22], mcpRegsEx[22];
     int8_t _temperature;
     uint8_t _panelOn = 0;
@@ -242,8 +247,6 @@ class Inkplate : public Adafruit_GFX {
 	uint16_t getPortsInternal(uint8_t _addr, uint8_t* _r);
     
     void I2SInit();
-    void sendStaticData(uint32_t _d, int _n);
-    void sendData(uint32_t *_d, int _n);
     void setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv);
 };
 
