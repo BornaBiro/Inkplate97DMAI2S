@@ -1082,19 +1082,18 @@ uint16_t Inkplate::getPorts() {
 void Inkplate::I2SInit()
 {
   periph_module_enable(PERIPH_I2S1_MODULE);
+  DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_I2S1_CLK_EN);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_I2S1_CLK_EN);
+  DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_I2S1_RST);
+  DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_I2S1_RST);
   //Setup I2S0 in LCD mode (reset RX & TX I2S0, FIFO reset fot RX & TX, do not start TX or RX data
   I2S1.conf.val = 0;
   I2S1.conf.tx_reset = 1;
-  I2S1.conf.rx_reset = 1;
   I2S1.conf.tx_reset = 0;
-  I2S1.conf.rx_reset = 0;
   I2S1.conf.tx_fifo_reset = 1;
-  I2S1.conf.rx_fifo_reset = 1;
   I2S1.conf.tx_fifo_reset = 0;
-  I2S1.conf.rx_fifo_reset = 0;
-  I2S1.conf.tx_start = 0;
-  I2S1.conf.rx_start = 0;
+  while (I2S1.state.tx_fifo_reset_back);
+  
 
   //Set LCD mode on I2S, setup delays on SD and WR lines (form 1)
   I2S1.conf2.val = 0;
@@ -1106,8 +1105,8 @@ void Inkplate::I2SInit()
   I2S1.clkm_conf.val = 0;
   //I2S0.clkm_conf.clka_en = 1;
   //I2S0.clkm_conf.clk_en = 1;
-  I2S1.clkm_conf.clkm_div_num = 0;
-  I2S1.clkm_conf.clkm_div_b = 1;
+  I2S1.clkm_conf.clkm_div_num = 2;
+  I2S1.clkm_conf.clkm_div_b = 0;
   I2S1.clkm_conf.clkm_div_a = 1;
 
   //Setup FIFO
@@ -1143,17 +1142,15 @@ void Inkplate::I2SInit()
   I2S1.sample_rate_conf.tx_bits_mod = 8;
   I2S1.sample_rate_conf.tx_bck_div_num = 2;
   //--------------------------------------
-  I2S1.int_clr.val = 0b00000000000000011111111111111111;
+
+  I2S1.int_ena.val = 0;
+  I2S1.int_clr.val = I2S1.int_raw.val;
 }
 
 void Inkplate::sendStaticData(uint32_t _d, int _n)
 {  
   int _k = 0;
   int i = 0;
-  I2S1.conf.tx_reset = 1;
-  I2S1.conf.tx_fifo_reset = 1;
-  I2S1.conf.tx_fifo_reset = 0;
-  I2S1.conf.tx_reset = 0;
   _k = (_n > 32?32:_n);
   for (i = 0; i < _k; i++)
   {
@@ -1164,7 +1161,7 @@ void Inkplate::sendStaticData(uint32_t _d, int _n)
   while(_n>0)
   {
     _k = (_n > 16?16:_n);
-    I2S1.int_clr.val = 0b00000000000000011111111111111111;
+    I2S1.int_clr.val = I2S1.int_raw.val;
     while (!I2S1.int_raw.tx_put_data);
     for (i = 0; i < _k; i++) {
       ESP_REG(0x3FF6D000) = _d;
@@ -1172,10 +1169,16 @@ void Inkplate::sendStaticData(uint32_t _d, int _n)
     _n -= i;
   }
 
-  I2S1.int_clr.val = 0b00000000000000011111111111111111;
+  I2S1.int_clr.val = I2S1.int_raw.val;
 
-  while (!I2S1.int_raw.tx_rempty);
+  while (!I2S1.state.tx_idle);  //YOU MORON! YOU WAIT WRONG INTERRUPT FLAG!
   I2S1.conf.tx_start = 0;
+  I2S1.int_clr.val = I2S1.int_raw.val;
+  I2S1.conf.tx_reset = 1;
+  I2S1.conf.tx_reset = 0;
+  I2S1.conf.tx_fifo_reset = 1;
+  I2S1.conf.tx_fifo_reset = 0;
+  while (I2S1.state.tx_fifo_reset_back);
 }
 
 void Inkplate::sendData(uint32_t *_d, int _n)
@@ -1183,10 +1186,6 @@ void Inkplate::sendData(uint32_t *_d, int _n)
   int _k = 0;
   int i = 0;
   int _r = 0;
-  I2S1.conf.tx_reset = 1;
-  I2S1.conf.tx_fifo_reset = 1;
-  I2S1.conf.tx_fifo_reset = 0;
-  I2S1.conf.tx_reset = 0;
   _k = (_n > 32?32:_n);
   for (i = 0; i < _k; i++)
   {
@@ -1198,7 +1197,7 @@ void Inkplate::sendData(uint32_t *_d, int _n)
   while(_n>0)
   {
     _k = (_n > 16?16:_n);
-    I2S1.int_clr.val = 0b00000000000000011111111111111111;
+    I2S1.int_clr.val = I2S1.int_raw.val;
     while (!I2S1.int_raw.tx_put_data);
     for (i = 0; i < _k; i++) {
       ESP_REG(0x3FF6D000) = _d[_r];
@@ -1206,12 +1205,16 @@ void Inkplate::sendData(uint32_t *_d, int _n)
     }
     _n -= i ;
   }
+  I2S1.int_clr.val = I2S1.int_raw.val;
 
-  I2S1.int_clr.val = 0b00000000000000011111111111111111;
-
-  while (!I2S1.int_raw.tx_rempty);
+  while (!I2S1.state.tx_idle);  //YOU MORON! YOU WAIT WRONG INTERRUPT FLAG!
   I2S1.conf.tx_start = 0;
-  I2S1.int_clr.val = 0b00000000000000011111111111111111;
+  I2S1.int_clr.val = I2S1.int_raw.val;
+  I2S1.conf.tx_reset = 1;
+  I2S1.conf.tx_reset = 0;
+  I2S1.conf.tx_fifo_reset = 1;
+  I2S1.conf.tx_fifo_reset = 0;
+  while (I2S1.state.tx_fifo_reset_back);
 }
 
 void Inkplate::setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv)

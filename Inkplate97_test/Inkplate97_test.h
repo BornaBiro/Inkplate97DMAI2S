@@ -205,6 +205,7 @@ class Inkplate : public Adafruit_GFX {
 	uint16_t getPorts();
 
   private:
+  portMUX_TYPE myMutex = portMUX_INITIALIZER_UNLOCKED;
 	uint8_t mcpRegsInt[22], mcpRegsEx[22];
     int8_t _temperature;
     uint8_t _panelOn = 0;
