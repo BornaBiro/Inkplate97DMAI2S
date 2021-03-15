@@ -73,6 +73,8 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 
 #define E_INK_WIDTH 		1200
 #define E_INK_HEIGHT 		825
+//#define E_INK_WIDTH 		800
+//#define E_INK_HEIGHT 		600
 #define BLACK 				1
 #define WHITE 				0
 #define GPIO0_ENABLE 		8
@@ -247,6 +249,7 @@ class Inkplate : public Adafruit_GFX {
 	uint16_t getPortsInternal(uint8_t _addr, uint8_t* _r);
     
     void I2SInit();
+    void I2SInitOLD();
     void setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv);
 };
 

@@ -94,7 +94,10 @@ void Inkplate::begin(void)
         Serial.println("DMA Allocation ERROR");
         while (true);
     }
-    
+    for(int i = 0; i < 400; i++)
+    {
+        b[i] = 0;
+    }
     setI2S1pin(0, I2S1O_WS_OUT_IDX, 1);
     setI2S1pin(4, I2S1O_DATA_OUT0_IDX, 0);
     setI2S1pin(5, I2S1O_DATA_OUT1_IDX, 0);
@@ -186,8 +189,14 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color) {
 
 void Inkplate::clearDisplay() {
   //Clear 1 bit per pixel display buffer
-  if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
-
+  if (_displayMode == 0)
+  {
+      //memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);  //memset for some reason breaks I2S, maybe it uses DMA?!
+      for (int i = 0; i < E_INK_WIDTH * E_INK_HEIGHT/8; i++)
+      {
+          _partial[i] = 0;
+      }
+  }
   //Clear 3 bit per pixel display buffer
   if (_displayMode == 1) memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
 }
@@ -339,7 +348,7 @@ void Inkplate::einkOff()
     unsigned long timer = millis();
     do {
         delay(1);
-    } while ((readPowerGood() != 0) && (millis() - timer) < 250);
+    } while ((readPowerGood() != 0) && (millis() - timer) < 1000);
 
     //pinsZstate();
     setPanelState(0);
@@ -373,12 +382,13 @@ void Inkplate::einkOn()
     unsigned long timer = millis();
     do {
         delay(1);
-    } while ((readPowerGood() != PWR_GOOD_OK) && (millis() - timer) < 250);
-	if ((millis() - timer) >= 250)
+    } while ((readPowerGood() != PWR_GOOD_OK) && (millis() - timer) < 1000);
+	if ((millis() - timer) >= 1000)
     {
         WAKEUP_CLEAR;
 		VCOM_CLEAR;
 		PWRUP_CLEAR;
+        Serial.println("TPS65186 ERR");
 		return;
     }
 
@@ -529,7 +539,7 @@ void Inkplate::vscan_start()
   CKV_CLEAR;
   delayMicroseconds(0); //usleep1();
   CKV_SET;
-  //delayMicroseconds(18);
+  delayMicroseconds(18);
 }
 
 void Inkplate::vscan_write()
@@ -547,18 +557,21 @@ void Inkplate::vscan_write()
 
 void Inkplate::hscan_start(uint32_t _d)
 {
-  SPH_CLEAR;
+  CKV_SET;
+  SPH_SET;
   //GPIO.out_w1ts = (_d) | CL;
   //GPIO.out_w1tc = DATA | CL;
-  //SPH_SET;
-  CKV_SET;
+  //myI2S->conf1.tx_stop_en = 1;
+  //myI2S->conf1.tx_stop_en = 0;
+  SPH_CLEAR;
 }
 
 void Inkplate::vscan_end() {
+  //delayMicroseconds(1);
   CKV_CLEAR;
   LE_SET;
   LE_CLEAR;
-  delayMicroseconds(0);
+  delayMicroseconds(1);
 }
 
 //Clears content from epaper diplay as fast as ESP32 can.
@@ -608,7 +621,7 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep) {
       //GPIO.out_w1ts = (_send) | CL;
       //GPIO.out_w1tc = DATA | CL;
       sendData();
-      SPH_SET;
+      //SPH_SET;
       vscan_end();
     }
     delayMicroseconds(230);
@@ -660,7 +673,7 @@ void Inkplate::pinsAsOutputs() {
 //--------------------------PRIVATE FUNCTIONS--------------------------------------------
 //Display content from RAM to display (1 bit per pixel,. monochrome picture).
 void Inkplate::display1b() {
-  I2SInit();
+  //I2SInit();
   for(int i = 0; i<(E_INK_HEIGHT * E_INK_WIDTH)/8; i++) {
 	  *(D_memory_new+i) &= *(_partial+i);
 	  *(D_memory_new+i) |= (*(_partial+i));
@@ -677,33 +690,33 @@ void Inkplate::display1b() {
   cleanFast(0, 15);
   cleanFast(1, 15);
   cleanFast(0, 15);
+  test->size = 300;
+  test->length = 300;
+  test->sosf = 1;
+  test->owner = 1;
+  test->qe.stqe_next = 0;
+  test->eof = 1;
+  test->buf = b;
+  test->offset = 0;
       for (int k = 0; k < 10; k++) {
         _pos = (E_INK_HEIGHT * E_INK_WIDTH / 8);
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; i++) {
-            for (int j = 0; j < (E_INK_WIDTH/4); j+=4) {
+            for (int n = 0; n < (E_INK_WIDTH/4); n+=4) {
                 dram1 = *(D_memory_new + _pos);
                 dram2 = *(D_memory_new + _pos - 1);
                 //_rowBuffer[j] = (LUTB[(dram)&0x0F])<<24 | (LUTB[(dram >> 4) & 0x0F])<<16 | (LUTB[(dram >> 8)&0x0F])<<8 | (LUTB[(dram >> 12) & 0x0F]);
                 //_pos-=2;
-                b[j] = LUTB[(dram2 >> 4) & 0x0F];//i + 2;
-                b[j + 1] = LUTB[dram2 & 0x0F]; //i + 3;
-                b[j + 2] = LUTB[(dram1 >> 4) & 0x0F];//i;
-                b[j + 3] = LUTB[dram1 & 0x0F];//i + 1;
+                b[n] = LUTB[(dram2 >> 4) & 0x0F];//i + 2;
+                b[n + 1] = LUTB[dram2 & 0x0F]; //i + 3;
+                b[n + 2] = LUTB[(dram1 >> 4) & 0x0F];//i;
+                b[n + 3] = LUTB[dram1 & 0x0F];//i + 1;
                 _pos-=2;
             }
-            test->size = 300;
-            test->length = 300;
-            test->sosf = 1;
-            test->owner = 1;
-            test->qe.stqe_next = 0;
-            test->eof = 1;
-            test->buf = b;
-            test->offset = 0;
             hscan_start(0);
             sendData();
-            SPH_SET;
             vscan_end();
+            //SPH_SET;
         }
         delayMicroseconds(230);
     }
@@ -1114,6 +1127,72 @@ uint16_t Inkplate::getPorts() {
 void Inkplate::I2SInit()
 {
   periph_module_enable(PERIPH_I2S1_MODULE);
+  periph_module_reset(PERIPH_I2S1_MODULE);
+    
+  //fifo_reset
+  myI2S->conf.rx_fifo_reset = 1;
+  myI2S->conf.rx_fifo_reset = 0;
+  myI2S->conf.tx_fifo_reset = 1;
+  myI2S->conf.tx_fifo_reset = 0;
+  
+  //dma_reset
+  myI2S->lc_conf.in_rst = 1;
+  myI2S->lc_conf.in_rst = 0;
+  myI2S->lc_conf.out_rst = 1;
+  myI2S->lc_conf.out_rst = 0;
+  
+  //i2s reset
+  myI2S->conf.rx_reset=1;
+  myI2S->conf.tx_reset=1;
+  myI2S->conf.rx_reset=0;
+  myI2S->conf.tx_reset=0;
+  
+  //Set LCD mode on I2S, setup delays on SD and WR lines (form 1)
+  myI2S->conf2.val = 0;
+  myI2S->conf2.lcd_en = 1;
+  myI2S->conf2.lcd_tx_wrx2_en = 1;
+  myI2S->conf2.lcd_tx_sdx2_en = 0;
+  
+  myI2S->sample_rate_conf.val = 0;
+  myI2S->sample_rate_conf.rx_bits_mod = 8;
+  myI2S->sample_rate_conf.tx_bits_mod = 8;
+  myI2S->sample_rate_conf.rx_bck_div_num = 2;
+  myI2S->sample_rate_conf.tx_bck_div_num = 2;
+  
+  myI2S->clkm_conf.val = 0;
+  myI2S->clkm_conf.clka_en = 0;
+  myI2S->clkm_conf.clkm_div_b = 0;
+  myI2S->clkm_conf.clkm_div_a = 1;
+  myI2S->clkm_conf.clk_en = 1;
+  
+  myI2S->clkm_conf.clkm_div_num = 1;
+  
+  myI2S->fifo_conf.val = 0;
+  myI2S->fifo_conf.rx_fifo_mod_force_en = 1;
+  myI2S->fifo_conf.tx_fifo_mod_force_en = 1;
+  myI2S->fifo_conf.tx_fifo_mod = 1;  //byte packing 0A0B_0B0C = 0, 0A0B_0C0D = 1, 0A00_0B00 = 3. Use dual mono single data
+  myI2S->fifo_conf.rx_data_num = 32;
+  myI2S->fifo_conf.tx_data_num = 32;
+  myI2S->fifo_conf.dscr_en = 1;
+  
+  myI2S->conf1.val = 0;
+  myI2S->conf1.tx_stop_en = 0;
+  myI2S->conf1.tx_pcm_bypass = 1;
+  
+  myI2S->conf_chan.val = 0;
+  myI2S->conf_chan.tx_chan_mod = 1;
+  myI2S->conf_chan.rx_chan_mod = 1;
+  
+  myI2S->conf.tx_right_first = 0; //!!invert_clk; // should be false / 0
+  myI2S->conf.rx_right_first = 0; //!!invert_clk;
+  
+  myI2S->timing.val = 0;
+  
+}
+
+void Inkplate::I2SInitOLD()
+{
+  periph_module_enable(PERIPH_I2S1_MODULE);
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_I2S1_CLK_EN);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_I2S1_CLK_EN);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, DPORT_I2S1_RST);
@@ -1143,10 +1222,11 @@ void Inkplate::I2SInit()
   //Setup a I2S clock source and divider
   //DO NOT USE FRAC./DECIMALS FOR DIVISION YOU MORON!!! READ FRICKIN' DATASHEET! Tested with B = 0, A = 1 and N = 80, N = 20, N = 10, N = 40
   myI2S->clkm_conf.val = 0;
-  myI2S->clkm_conf.clkm_div_num = 1;
   myI2S->clkm_conf.clka_en = 1;
   myI2S->clkm_conf.clkm_div_b = 0;
   myI2S->clkm_conf.clkm_div_a = 1;
+  
+  myI2S->clkm_conf.clkm_div_num = 1;
 
   //Setup FIFO
   myI2S->fifo_conf.val = 0;
@@ -1157,7 +1237,7 @@ void Inkplate::I2SInit()
 
   //----------bitluni's C/P---------------
   myI2S->conf1.val = 0;
-  myI2S->conf1.tx_stop_en = 1;    //Must be set when using FIFO Mode (without DMA)!
+  myI2S->conf1.tx_stop_en = 0;    //Must be set when using FIFO Mode (without DMA)!
   myI2S->conf1.tx_pcm_bypass = 1;
 
   myI2S->conf_chan.val = 0;
@@ -1187,7 +1267,7 @@ void Inkplate::I2SInit()
   myI2S->lc_conf.out_rst = 0;
   myI2S->lc_conf.ahbm_rst = 0;
   myI2S->lc_conf.ahbm_fifo_rst = 0;
-  myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN | I2S_OUT_DATA_BURST_EN;
+  //myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN | I2S_OUT_DATA_BURST_EN;
 
   myI2S->int_ena.val = 0;
   myI2S->int_clr.val = myI2S->int_raw.val;
@@ -1195,17 +1275,52 @@ void Inkplate::I2SInit()
 
 static void IRAM_ATTR sendData()
 {
-  myI2S->out_link.addr = (uint32_t)(test) & 0x000FFFFF;
-  myI2S->out_link.start = 1;
-  myI2S->conf.tx_start = 1;
-  while (!myI2S->int_raw.out_done); //
-  while (!myI2S->state.tx_idle);  //YOU MORON! YOU WAIT WRONG INTERRUPT FLAG!
+  //myI2S->out_link.addr = (uint32_t)(test) & 0x000FFFFF;
+  //myI2S->out_link.start = 1;
+  //myI2S->conf.tx_start = 1;
+  //while (!myI2S->int_raw.out_done); //
+  //while (!myI2S->state.tx_idle);  //YOU MORON! YOU WAIT WRONG INTERRUPT FLAG!
+  //myI2S->conf.tx_start = 0;
+  //myI2S->int_clr.val = myI2S->int_raw.val;
+  //myI2S->conf.tx_reset = 1;
+  //myI2S->conf.tx_reset = 0;
+  //myI2S->conf.tx_fifo_reset = 1;
+  //myI2S->conf.tx_fifo_reset = 0;
+  
+  myI2S->out_link.stop = 1;
+  myI2S->out_link.start = 0;
   myI2S->conf.tx_start = 0;
-  myI2S->int_clr.val = myI2S->int_raw.val;
-  myI2S->conf.tx_reset = 1;
-  myI2S->conf.tx_reset = 0;
+  
+  myI2S->conf.rx_fifo_reset = 1;
+  myI2S->conf.rx_fifo_reset = 0;
   myI2S->conf.tx_fifo_reset = 1;
   myI2S->conf.tx_fifo_reset = 0;
+  
+  //dma_reset
+  myI2S->lc_conf.in_rst = 1;
+  myI2S->lc_conf.in_rst = 0;
+  myI2S->lc_conf.out_rst = 1;
+  myI2S->lc_conf.out_rst = 0;
+  
+  //i2s reset
+  myI2S->conf.rx_reset=1;
+  myI2S->conf.tx_reset=1;
+  myI2S->conf.rx_reset=0;
+  myI2S->conf.tx_reset=0;
+  
+  myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
+  myI2S->out_link.addr = (uint32_t)(test) & 0x000FFFFF;
+  myI2S->out_link.stop = 0;
+  myI2S->out_link.start = 1;
+  myI2S->conf.tx_start = 1;
+  
+  //while (!myI2S->int_raw.out_done); //
+  //while (!myI2S->state.tx_idle);  //YOU MORON! YOU WAIT WRONG INTERRUPT FLAG!
+  while (!myI2S->int_raw.out_total_eof);
+  myI2S->int_clr.val = myI2S->int_raw.val;
+  myI2S->out_link.stop = 1;
+  myI2S->out_link.start = 0;
+  myI2S->conf.tx_start = 0;
 }
 
 void Inkplate::setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv)
