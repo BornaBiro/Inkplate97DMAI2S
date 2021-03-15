@@ -571,7 +571,7 @@ void Inkplate::vscan_end() {
   CKV_CLEAR;
   LE_SET;
   LE_CLEAR;
-  delayMicroseconds(1);
+  delayMicroseconds(0);
 }
 
 //Clears content from epaper diplay as fast as ESP32 can.
@@ -621,7 +621,6 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep) {
       //GPIO.out_w1ts = (_send) | CL;
       //GPIO.out_w1tc = DATA | CL;
       sendData();
-      //SPH_SET;
       vscan_end();
     }
     delayMicroseconds(230);
@@ -716,7 +715,6 @@ void Inkplate::display1b() {
             hscan_start(0);
             sendData();
             vscan_end();
-            //SPH_SET;
         }
         delayMicroseconds(230);
     }
@@ -1130,8 +1128,8 @@ void Inkplate::I2SInit()
   periph_module_reset(PERIPH_I2S1_MODULE);
     
   //fifo_reset
-  myI2S->conf.rx_fifo_reset = 1;
-  myI2S->conf.rx_fifo_reset = 0;
+  //myI2S->conf.rx_fifo_reset = 1;
+  //myI2S->conf.rx_fifo_reset = 0;
   myI2S->conf.tx_fifo_reset = 1;
   myI2S->conf.tx_fifo_reset = 0;
   
@@ -1142,9 +1140,9 @@ void Inkplate::I2SInit()
   myI2S->lc_conf.out_rst = 0;
   
   //i2s reset
-  myI2S->conf.rx_reset=1;
+  //myI2S->conf.rx_reset=1;
   myI2S->conf.tx_reset=1;
-  myI2S->conf.rx_reset=0;
+  //myI2S->conf.rx_reset=0;
   myI2S->conf.tx_reset=0;
   
   //Set LCD mode on I2S, setup delays on SD and WR lines (form 1)
@@ -1154,24 +1152,24 @@ void Inkplate::I2SInit()
   myI2S->conf2.lcd_tx_sdx2_en = 0;
   
   myI2S->sample_rate_conf.val = 0;
-  myI2S->sample_rate_conf.rx_bits_mod = 8;
+  //myI2S->sample_rate_conf.rx_bits_mod = 8;
   myI2S->sample_rate_conf.tx_bits_mod = 8;
-  myI2S->sample_rate_conf.rx_bck_div_num = 2;
+  //myI2S->sample_rate_conf.rx_bck_div_num = 2;
   myI2S->sample_rate_conf.tx_bck_div_num = 2;
   
   myI2S->clkm_conf.val = 0;
   myI2S->clkm_conf.clka_en = 0;
   myI2S->clkm_conf.clkm_div_b = 0;
   myI2S->clkm_conf.clkm_div_a = 1;
-  myI2S->clkm_conf.clk_en = 1;
+  //myI2S->clkm_conf.clk_en = 1;
   
   myI2S->clkm_conf.clkm_div_num = 1;
   
   myI2S->fifo_conf.val = 0;
-  myI2S->fifo_conf.rx_fifo_mod_force_en = 1;
+  //myI2S->fifo_conf.rx_fifo_mod_force_en = 1;
   myI2S->fifo_conf.tx_fifo_mod_force_en = 1;
   myI2S->fifo_conf.tx_fifo_mod = 1;  //byte packing 0A0B_0B0C = 0, 0A0B_0C0D = 1, 0A00_0B00 = 3. Use dual mono single data
-  myI2S->fifo_conf.rx_data_num = 32;
+  //myI2S->fifo_conf.rx_data_num = 32;
   myI2S->fifo_conf.tx_data_num = 32;
   myI2S->fifo_conf.dscr_en = 1;
   
@@ -1181,10 +1179,10 @@ void Inkplate::I2SInit()
   
   myI2S->conf_chan.val = 0;
   myI2S->conf_chan.tx_chan_mod = 1;
-  myI2S->conf_chan.rx_chan_mod = 1;
+  //myI2S->conf_chan.rx_chan_mod = 1;
   
   myI2S->conf.tx_right_first = 0; //!!invert_clk; // should be false / 0
-  myI2S->conf.rx_right_first = 0; //!!invert_clk;
+  //myI2S->conf.rx_right_first = 0; //!!invert_clk;
   
   myI2S->timing.val = 0;
   
@@ -1291,24 +1289,24 @@ static void IRAM_ATTR sendData()
   myI2S->out_link.start = 0;
   myI2S->conf.tx_start = 0;
   
-  myI2S->conf.rx_fifo_reset = 1;
-  myI2S->conf.rx_fifo_reset = 0;
+  //myI2S->conf.rx_fifo_reset = 1;
+  //myI2S->conf.rx_fifo_reset = 0;
   myI2S->conf.tx_fifo_reset = 1;
   myI2S->conf.tx_fifo_reset = 0;
   
   //dma_reset
-  myI2S->lc_conf.in_rst = 1;
-  myI2S->lc_conf.in_rst = 0;
+  //myI2S->lc_conf.in_rst = 1;
+  //myI2S->lc_conf.in_rst = 0;
   myI2S->lc_conf.out_rst = 1;
   myI2S->lc_conf.out_rst = 0;
   
   //i2s reset
-  myI2S->conf.rx_reset=1;
+  //myI2S->conf.rx_reset=1;
   myI2S->conf.tx_reset=1;
-  myI2S->conf.rx_reset=0;
+  //myI2S->conf.rx_reset=0;
   myI2S->conf.tx_reset=0;
   
-  myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
+  //myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
   myI2S->out_link.addr = (uint32_t)(test) & 0x000FFFFF;
   myI2S->out_link.stop = 0;
   myI2S->out_link.start = 1;
