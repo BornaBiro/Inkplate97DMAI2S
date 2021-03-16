@@ -98,7 +98,7 @@ void Inkplate::begin(void)
     {
         b[i] = 0;
     }
-    setI2S1pin(0, I2S1O_WS_OUT_IDX, 1);
+    setI2S1pin(0, I2S1O_BCK_OUT_IDX, 1);
     setI2S1pin(4, I2S1O_DATA_OUT0_IDX, 0);
     setI2S1pin(5, I2S1O_DATA_OUT1_IDX, 0);
     setI2S1pin(18, I2S1O_DATA_OUT2_IDX, 0);
@@ -191,11 +191,11 @@ void Inkplate::clearDisplay() {
   //Clear 1 bit per pixel display buffer
   if (_displayMode == 0)
   {
-      //memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);  //memset for some reason breaks I2S, maybe it uses DMA?!
-      for (int i = 0; i < E_INK_WIDTH * E_INK_HEIGHT/8; i++)
-      {
-          _partial[i] = 0;
-      }
+      memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);  //memset for some reason breaks I2S, maybe it uses DMA?!
+      //for (int i = 0; i < E_INK_WIDTH * E_INK_HEIGHT/8; i++)
+      //{
+      //    _partial[i] = 0;
+      //}
   }
   //Clear 3 bit per pixel display buffer
   if (_displayMode == 1) memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
@@ -336,6 +336,7 @@ void Inkplate::einkOff()
     OE_CLEAR;
     GMOD_CLEAR;
     //GPIO.out &= ~(DATA | LE | CL);
+    LE_CLEAR;
     CKV_CLEAR;
     SPH_CLEAR;
     SPV_CLEAR;
@@ -359,8 +360,9 @@ void Inkplate::einkOn()
 {
     if (getPanelState() == 1)
         return;
+    delay(5);
     WAKEUP_SET;
-    delay(1);
+    delay(5);
     PWRUP_SET;
 
     // Enable all rails
@@ -548,7 +550,7 @@ void Inkplate::vscan_write()
   LE_SET;
   LE_CLEAR;
   delayMicroseconds(0);
-  SPH_CLEAR;
+  SPH_SET;
   //CL_SET;
   //CL_CLEAR;
   SPH_SET;
@@ -1254,7 +1256,7 @@ void Inkplate::I2SInitOLD()
 
   myI2S->sample_rate_conf.val = 0;
   myI2S->sample_rate_conf.tx_bits_mod = 8;
-  myI2S->sample_rate_conf.tx_bck_div_num = 2;
+  myI2S->sample_rate_conf.tx_bck_div_num = 1;
   //--------------------------------------
 
   myI2S->lc_conf.val = 0;
@@ -1325,7 +1327,6 @@ static void IRAM_ATTR sendData()
   myI2S->int_clr.val = myI2S->int_raw.val;
   myI2S->out_link.stop = 1;
   myI2S->out_link.start = 0;
-  myI2S->conf.tx_start = 0;
 }
 
 void Inkplate::setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv)
