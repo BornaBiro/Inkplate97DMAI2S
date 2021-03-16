@@ -558,16 +558,17 @@ void Inkplate::vscan_write()
 void Inkplate::hscan_start(uint32_t _d)
 {
   CKV_SET;
-  SPH_SET;
-  //GPIO.out_w1ts = (_d) | CL;
-  //GPIO.out_w1tc = DATA | CL;
-  //myI2S->conf1.tx_stop_en = 1;
-  //myI2S->conf1.tx_stop_en = 0;
-  SPH_CLEAR;
+  //SPH_SET;
+  ////GPIO.out_w1ts = (_d) | CL;
+  ////GPIO.out_w1tc = DATA | CL;
+  ////myI2S->conf1.tx_stop_en = 1;
+  ////myI2S->conf1.tx_stop_en = 0;
+  //SPH_CLEAR;
 }
 
 void Inkplate::vscan_end() {
   //delayMicroseconds(1);
+  SPH_SET;
   CKV_CLEAR;
   LE_SET;
   LE_CLEAR;
@@ -1308,8 +1309,14 @@ static void IRAM_ATTR sendData()
   
   //myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
   myI2S->out_link.addr = (uint32_t)(test) & 0x000FFFFF;
-  myI2S->out_link.stop = 0;
+  //myI2S->out_link.stop = 0;
   myI2S->out_link.start = 1;
+  
+  //Wait little to fill FIFO buffer with data (there must be a better way to do this!)
+  SPH_CLEAR;
+  SPH_CLEAR;
+  SPH_CLEAR;
+  SPH_CLEAR;
   myI2S->conf.tx_start = 1;
   
   //while (!myI2S->int_raw.out_done); //
