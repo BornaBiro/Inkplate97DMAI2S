@@ -87,9 +87,10 @@ void Inkplate::begin(void)
     //pinMode(25, OUTPUT);
     //pinMode(26, OUTPUT);
     //pinMode(27, OUTPUT); //D7
-    b = (uint8_t*)heap_caps_malloc(400, MALLOC_CAP_DMA);
+    b = (uint8_t*)heap_caps_malloc(350, MALLOC_CAP_DMA);
+    c = (uint8_t*)heap_caps_malloc(350, MALLOC_CAP_DMA);
     test = (lldesc_s*)heap_caps_malloc(sizeof(lldesc_t), MALLOC_CAP_DMA);
-    if (b == NULL || test == NULL)
+    if (b == NULL || c == NULL || test == NULL)
     {
         Serial.println("DMA Allocation ERROR");
         while (true);
@@ -122,8 +123,8 @@ void Inkplate::begin(void)
     _partial = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
     _pBuffer = (uint8_t*) ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 4);
     D_memory4Bit = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
-    GLUT = (uint32_t*)malloc(256 * 8 * sizeof(uint32_t));
-    GLUT2 = (uint32_t*)malloc(256 * 8 * sizeof(uint32_t));
+    GLUT = (uint8_t*)malloc(256 * 8);
+    GLUT2 = (uint8_t*)malloc(256 * 8);
     if (D_memory_new == NULL || _partial == NULL || _pBuffer == NULL || D_memory4Bit == NULL)
     {
         do
@@ -138,15 +139,9 @@ void Inkplate::begin(void)
     memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
   
     for (int j = 0; j < 8; ++j) {
-        for (uint32_t i = 0; i < 256; ++i) {
-        //GLUT[j][i] = (waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i>>4) & 0x07][j]);
-        uint8_t z = (waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i >> 4) & 0x07][j]);
-        GLUT[j*256+i] = ((z & B00000011) << 4) | (((z & B00001100) >> 2) << 18) | (((z & B00010000) >> 4) << 23) |
-                        (((z & B11100000) >> 5) << 25);
-        //GLUT2[j][i] = ((waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i>>4) & 0x07][j]))<<4;
-        z = ((waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i >> 4) & 0x07][j])) << 4;
-        GLUT2[j*256+i] = ((z & B00000011) << 4) | (((z & B00001100) >> 2) << 18) | (((z & B00010000) >> 4) << 23) |
-                        (((z & B11100000) >> 5) << 25);
+        for (int i = 0; i < 256; ++i) {
+        GLUT[j*256+i] = (waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i >> 4) & 0x07][j]);
+        GLUT2[j*256+i] = ((waveform3Bit[i & 0x07][j] << 2) | (waveform3Bit[(i >> 4) & 0x07][j])) << 4;
         }
     }
   
@@ -179,24 +174,17 @@ void Inkplate::drawPixel(int16_t x0, int16_t y0, uint16_t color) {
     *(_partial + (E_INK_WIDTH/8 * y0) + x) = ~pixelMaskLUT[x_sub] & temp | (color ? pixelMaskLUT[x_sub] : 0);
   } else {
     color &= 7;
-    int x = x0 / 2;
-    int x_sub = x0 % 2;
+    int x = x0 >> 1;
+    int x_sub = x0 & 1;
     uint8_t temp;
-    temp = *(D_memory4Bit + E_INK_WIDTH/2 * y0 + x);
-    *(D_memory4Bit + E_INK_WIDTH/2 * y0 + x) = pixelMaskGLUT[x_sub] & temp | (x_sub ? color : color << 4);
+    temp = *(D_memory4Bit + (E_INK_WIDTH >> 1) * y0 + x);
+    *(D_memory4Bit + (E_INK_WIDTH >> 1) * y0 + x) = (pixelMaskGLUT[x_sub] & temp) | (x_sub ? color : color << 4);
   }
 }
 
 void Inkplate::clearDisplay() {
   //Clear 1 bit per pixel display buffer
-  if (_displayMode == 0)
-  {
-      memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);  //memset for some reason breaks I2S, maybe it uses DMA?!
-      //for (int i = 0; i < E_INK_WIDTH * E_INK_HEIGHT/8; i++)
-      //{
-      //    _partial[i] = 0;
-      //}
-  }
+  if (_displayMode == 0) memset(_partial, 0, E_INK_WIDTH * E_INK_HEIGHT/8);
   //Clear 3 bit per pixel display buffer
   if (_displayMode == 1) memset(D_memory4Bit, 255, E_INK_WIDTH * E_INK_HEIGHT/2);
 }
@@ -349,7 +337,7 @@ void Inkplate::einkOff()
     unsigned long timer = millis();
     do {
         delay(1);
-    } while ((readPowerGood() != 0) && (millis() - timer) < 1000);
+    } while ((readPowerGood() != 0) && (millis() - timer) < 250);
 
     //pinsZstate();
     setPanelState(0);
@@ -384,8 +372,8 @@ void Inkplate::einkOn()
     unsigned long timer = millis();
     do {
         delay(1);
-    } while ((readPowerGood() != PWR_GOOD_OK) && (millis() - timer) < 1000);
-	if ((millis() - timer) >= 1000)
+    } while ((readPowerGood() != PWR_GOOD_OK) && (millis() - timer) < 250);
+	if ((millis() - timer) >= 250)
     {
         WAKEUP_CLEAR;
 		VCOM_CLEAR;
@@ -595,7 +583,7 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep) {
 	data = B11111111;	  //Skip
     //_send = (B11111111) | (B11111111 << 8) | (B11111111 << 16) | (B11111111 << 24);
   }
-  for (int i = 0; i < 300; i++)
+  for (int i = 0; i < 300; ++i)
   {
     b[i] = data;
   }
@@ -609,10 +597,10 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep) {
   test->offset = 0;
   //uint32_t _send = ((data & B00000011) << 4) | (((data & B00001100) >> 2) << 18) | (((data & B00010000) >> 4) << 23) | (((data & B11100000) >> 5) << 25);
   //_send = (data << 0) | (data << 8) | (data << 16) | (data << 24);
-    for (int k = 0; k < rep; k++) {
+    for (int k = 0; k < rep; ++k) {
     vscan_start();
-    for (int i = 0; i < E_INK_HEIGHT; i++) {
-      hscan_start(0);
+    for (int i = 0; i < E_INK_HEIGHT; ++i) {
+      hscan_start();
       //GPIO.out_w1ts = (_send) | CL;
       //GPIO.out_w1tc = CL;
       //for (int j = 0; j < (E_INK_WIDTH/8)-1; j++) {
@@ -624,9 +612,13 @@ void Inkplate::cleanFast(uint8_t c, uint8_t rep) {
       //GPIO.out_w1ts = (_send) | CL;
       //GPIO.out_w1tc = DATA | CL;
       sendData();
+      while (!myI2S->int_raw.out_total_eof);
+      myI2S->int_clr.val = myI2S->int_raw.val;
+      myI2S->out_link.stop = 1;
+      myI2S->out_link.start = 0;
       vscan_end();
     }
-    delayMicroseconds(230);
+    //delayMicroseconds(230);
   }
 }
 
@@ -692,34 +684,37 @@ void Inkplate::display1b() {
   cleanFast(0, 15);
   cleanFast(1, 15);
   cleanFast(0, 15);
-  test->size = 300;
-  test->length = 300;
-  test->sosf = 1;
-  test->owner = 1;
-  test->qe.stqe_next = 0;
-  test->eof = 1;
-  test->buf = b;
-  test->offset = 0;
-      for (int k = 0; k < 10; k++) {
+  //test->size = 300;
+  //test->length = 300;
+  //test->sosf = 1;
+  //test->owner = 1;
+  //test->qe.stqe_next = 0;
+  //test->eof = 1;
+  //test->buf = b;
+  //test->offset = 0;
+  myI2S->int_clr.val = myI2S->int_raw.val;
+      for (int k = 0; k < 7; ++k) {
         _pos = (E_INK_HEIGHT * E_INK_WIDTH / 8);
         vscan_start();
-        for (int i = 0; i < E_INK_HEIGHT; i++) {
+        for (int i = 0; i < E_INK_HEIGHT; ++i) {
+            hscan_start();
             for (int n = 0; n < (E_INK_WIDTH/4); n+=4) {
                 dram1 = *(D_memory_new + _pos);
                 dram2 = *(D_memory_new + _pos - 1);
-                //_rowBuffer[j] = (LUTB[(dram)&0x0F])<<24 | (LUTB[(dram >> 4) & 0x0F])<<16 | (LUTB[(dram >> 8)&0x0F])<<8 | (LUTB[(dram >> 12) & 0x0F]);
-                //_pos-=2;
                 b[n] = LUTB[(dram2 >> 4) & 0x0F];//i + 2;
                 b[n + 1] = LUTB[dram2 & 0x0F]; //i + 3;
                 b[n + 2] = LUTB[(dram1 >> 4) & 0x0F];//i;
                 b[n + 3] = LUTB[dram1 & 0x0F];//i + 1;
                 _pos-=2;
             }
-            hscan_start(0);
             sendData();
+            while (!myI2S->int_raw.out_total_eof);
+            myI2S->int_clr.val = myI2S->int_raw.val;
+            myI2S->out_link.stop = 1;
+            myI2S->out_link.start = 0;
             vscan_end();
         }
-        delayMicroseconds(230);
+        //delayMicroseconds(230);
     }
   /*
 	_pos = (E_INK_HEIGHT * E_INK_WIDTH / 8) - 1;
@@ -748,9 +743,9 @@ void Inkplate::display1b() {
     }
     delayMicroseconds(230);
     */
-    cleanFast(2, 2);
-    cleanFast(3, 1);
-    vscan_start();
+    cleanFast(2, 1);
+    //cleanFast(3, 1);
+    //vscan_start();
     einkOff();
     _blockPartial = 0;
 }
@@ -760,76 +755,45 @@ void Inkplate::display3b() {
   einkOn();
   cleanFast(0, 1);
   cleanFast(1, 15);
-  cleanFast(2, 1);
   cleanFast(0, 15);
-  cleanFast(2, 1);
   cleanFast(1, 15);
-  cleanFast(2, 1);
   cleanFast(0, 15);
-  
+  //test->size = 300;
+  //test->length = 300;
+  //test->sosf = 1;
+  //test->owner = 1;
+  //test->qe.stqe_next = 0;
+  //test->eof = 1;
+  //test->buf = b;
+  //test->offset = 0;
+  myI2S->int_clr.val = myI2S->int_raw.val;
   for (int k = 0; k < 8; k++) {
       uint8_t *dp = D_memory4Bit + (E_INK_HEIGHT * E_INK_WIDTH/2);
-      uint32_t _send;
-      uint8_t pix1;
-      uint8_t pix2;
-      uint8_t pix3;
-      uint8_t pix4;
-	  uint8_t pixel;
-      uint8_t pixel2;
-	  
       vscan_start();
-      for (int i = 0; i < E_INK_HEIGHT; i++) {
-		//pixel = 0B00000000;
-        //pixel2 = 0B00000000;
-		//pix1 = *(dp--);
-        //pix2 = *(dp--);
-		//pix3 = *(dp--);
-        //pix4 = *(dp--);
-		//pixel |= ( waveform3Bit[pix1&0x07][k] << 6) | ( waveform3Bit[(pix1>>4)&0x07][k] << 4) | ( waveform3Bit[pix2&0x07][k] << 2) | ( waveform3Bit[(pix2>>4)&0x07][k] << 0);
-		//pixel2 |= ( waveform3Bit[pix3&0x07][k] << 6) | ( waveform3Bit[(pix3>>4)&0x07][k] << 4) | ( waveform3Bit[pix4&0x07][k] << 2) | ( waveform3Bit[(pix4>>4)&0x07][k] << 0);
-
-        //_send = ((pixel & B00000011) << 4) | (((pixel & B00001100) >> 2) << 18) | (((pixel & B00010000) >> 4) << 23) | (((pixel & B11100000) >> 5) << 25);
-		//hscan_start(_send);
-        hscan_start((GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]));
-        //_send = ((pixel2 & B00000011) << 4) | (((pixel2 & B00001100) >> 2) << 18) | (((pixel2 & B00010000) >> 4) << 23) | (((pixel2 & B11100000) >> 5) << 25);
-        //GPIO.out_w1ts = (_send) | CL;
-        //GPIO.out_w1tc = DATA | CL;
-        GPIO.out_w1ts = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
-        GPIO.out_w1tc = DATA | CL;
-		
-        for (int j = 0; j < ((E_INK_WIDTH/8)-1); j++) {
-
-          //pixel = 0B00000000;
-          //pixel2 = 0B00000000;
-		  //pix1 = *(dp--);
-          //pix2 = *(dp--);
-		  //pix3 = *(dp--);
-          //pix4 = *(dp--);
-		  //pixel |= ( waveform3Bit[pix1&0x07][k] << 6) | ( waveform3Bit[(pix1>>4)&0x07][k] << 4) | ( waveform3Bit[pix2&0x07][k] << 2) | ( waveform3Bit[(pix2>>4)&0x07][k] << 0);
-		  //pixel2 |= ( waveform3Bit[pix3&0x07][k] << 6) | ( waveform3Bit[(pix3>>4)&0x07][k] << 4) | ( waveform3Bit[pix4&0x07][k] << 2) | ( waveform3Bit[(pix4>>4)&0x07][k] << 0);
-
-          //_send = ((pixel & B00000011) << 4) | (((pixel & B00001100) >> 2) << 18) | (((pixel & B00010000) >> 4) << 23) | (((pixel & B11100000) >> 5) << 25);
-		  //GPIO.out_w1ts = (_send) | CL;
-          //GPIO.out_w1tc = DATA | CL;
-          GPIO.out_w1ts = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
-          GPIO.out_w1tc = DATA | CL;
-
-          //_send = ((pixel2 & B00000011) << 4) | (((pixel2 & B00001100) >> 2) << 18) | (((pixel2 & B00010000) >> 4) << 23) | (((pixel2 & B11100000) >> 5) << 25);
-          //GPIO.out_w1ts = (_send) | CL;
-          //GPIO.out_w1tc = DATA | CL;
-          GPIO.out_w1ts = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]) | CL;
-          GPIO.out_w1tc = DATA | CL;
+      for (int i = 0; i < E_INK_HEIGHT; ++i)
+      {
+        hscan_start();
+        for (int j = 0; j < (E_INK_WIDTH/4); j+=4)
+        {
+            //DMA with it's stupid byte ordering
+            b[j + 2] = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]);
+            b[j + 3] = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]);
+            b[j] = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]);
+            b[j + 1] = (GLUT2[k*256+(*(--dp))] | GLUT[k*256+(*(--dp))]);
         }
-	    GPIO.out_w1ts = CL;
-        GPIO.out_w1tc = DATA | CL;
+        sendData();
+        while (!myI2S->int_raw.out_total_eof);
+        myI2S->int_clr.val = myI2S->int_raw.val;
+        myI2S->out_link.stop = 1;
+        myI2S->out_link.start = 0;
 	    vscan_end();
       }
-      delayMicroseconds(230);
+      //delayMicroseconds(230);
   }
   //delay(50);
   //cleanFast(2, 1);
-  cleanFast(3, 1);
-  vscan_start();
+  //cleanFast(3, 1);
+  //vscan_start();
   einkOff();
 }
 
@@ -1323,10 +1287,10 @@ static void IRAM_ATTR sendData()
   
   //while (!myI2S->int_raw.out_done); //
   //while (!myI2S->state.tx_idle);  //YOU MORON! YOU WAIT WRONG INTERRUPT FLAG!
-  while (!myI2S->int_raw.out_total_eof);
-  myI2S->int_clr.val = myI2S->int_raw.val;
-  myI2S->out_link.stop = 1;
-  myI2S->out_link.start = 0;
+  //while (!myI2S->int_raw.out_total_eof);
+  //myI2S->int_clr.val = myI2S->int_raw.val;
+  //myI2S->out_link.stop = 1;
+  //myI2S->out_link.start = 0;
 }
 
 void Inkplate::setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv)

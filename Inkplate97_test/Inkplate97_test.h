@@ -135,8 +135,8 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 extern SPIClass spi2;
 extern SdFat sd;
 static void IRAM_ATTR sendData();
-static volatile uint8_t *b;
-static volatile uint8_t *c;
+static uint8_t *b;
+static uint8_t *c;
 static volatile lldesc_s* test;
 static i2s_dev_t *myI2S = &I2S1;
 
@@ -154,10 +154,10 @@ class Inkplate : public Adafruit_GFX {
     const uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100, B11000011, B11000000, B00111111, B00111100, B00110011, B00110000, B00001111, B00001100, B00000011, B00000000};
     //BLACK->WHITE
 	//THIS IS OKAYISH WAVEFORM FOR GRAYSCALE. IT CAN BE MUCH BETTER.
-	const uint8_t waveform3Bit[8][8] = {{0, 0, 0, 0, 1, 1, 1, 0}, {1, 2, 2, 2, 1, 1, 1, 0}, {0, 1, 1, 1, 2, 2, 1, 0}, {0, 0, 1, 1, 1, 1, 2, 0}, {0, 0, 0, 1, 1, 1, 2, 0}, {2, 1, 1, 1, 2, 1, 2, 0}, {1, 1, 1, 2, 1, 2, 2, 0}, {0, 0, 0, 0, 0, 2, 2, 0}};
+	const uint8_t waveform3Bit[8][8] = {{1, 2, 2, 2, 1, 1, 1, 0}, {0, 0, 1, 2, 2, 1, 1, 0}, {0, 1, 1, 1, 2, 2, 1, 0}, {1, 1, 1, 2, 2, 2, 1, 0}, {0, 0, 0, 1, 1, 1, 2, 0}, {2, 1, 1, 1, 2, 1, 2, 0}, {1, 1, 1, 2, 1, 2, 2, 0}, {0, 0, 0, 0, 0, 2, 2, 0}};
     uint32_t pinLUT[256];
-    uint32_t* GLUT;
-    uint32_t* GLUT2;
+    uint8_t* GLUT;
+    uint8_t* GLUT2;
 	
 	struct bitmapHeader {
 		uint16_t signature;
