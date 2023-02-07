@@ -17,14 +17,21 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 SPIClass spi2(HSPI);
 SdFat sd(&spi2);
 
+DRAM_ATTR const uint8_t LUT2[16] = {B10101010, B10101001, B10100110, B10100101, B10011010, B10011001, B10010110, B10010101, B01101010, B01101001, B01100110, B01100101, B01011010, B01011001, B01010110, B01010101};
+DRAM_ATTR const uint8_t LUTW[16] = {B11111111, B11111110, B11111011, B11111010, B11101111, B11101110, B11101011, B11101010, B10111111, B10111110, B10111011, B10111010, B10101111, B10101110, B10101011, B10101010};
+DRAM_ATTR const uint8_t LUTB[16] = {B11111111, B11111101, B11110111, B11110101, B11011111, B11011101, B11010111, B11010101, B01111111, B01111101, B01110111, B01110101, B01011111, B01011101, B01010111, B01010101};
+DRAM_ATTR const uint8_t pixelMaskLUT[8] = {B00000001, B00000010, B00000100, B00001000, B00010000, B00100000, B01000000, B10000000};
+DRAM_ATTR const uint8_t pixelMaskGLUT[2] = {B00001111, B11110000};
+DRAM_ATTR const uint8_t discharge[16] = {B11111111, B11111100, B11110011, B11110000, B11001111, B11001100, B11000011, B11000000, B00111111, B00111100, B00110011, B00110000, B00001111, B00001100, B00000011, B00000000};
+
 
 //--------------------------USER FUNCTIONS--------------------------------------------
 Inkplate::Inkplate(uint8_t _mode) : Adafruit_GFX(E_INK_WIDTH, E_INK_HEIGHT)
 {
     _displayMode = _mode;
-      for (uint32_t i = 0; i < 256; ++i)
-        pinLUT[i] = ((i & B00000011) << 4) | (((i & B00001100) >> 2) << 18) | (((i & B00010000) >> 4) << 23) |
-                    (((i & B11100000) >> 5) << 25);
+      //for (uint32_t i = 0; i < 256; ++i)
+      //  pinLUT[i] = ((i & B00000011) << 4) | (((i & B00001100) >> 2) << 18) | (((i & B00010000) >> 4) << 23) |
+      //              (((i & B11100000) >> 5) << 25);
 }
 
 void Inkplate::begin(void)
@@ -87,19 +94,19 @@ void Inkplate::begin(void)
     //pinMode(25, OUTPUT);
     //pinMode(26, OUTPUT);
     //pinMode(27, OUTPUT); //D7
-    b = (uint8_t*)heap_caps_malloc(350, MALLOC_CAP_DMA);
-    c = (uint8_t*)heap_caps_malloc(350, MALLOC_CAP_DMA);
+    b = (uint8_t*)heap_caps_malloc(800, MALLOC_CAP_DMA);
+    //c = (uint8_t*)heap_caps_malloc(600, MALLOC_CAP_DMA);
     test = (lldesc_s*)heap_caps_malloc(sizeof(lldesc_t), MALLOC_CAP_DMA);
-    if (b == NULL || c == NULL || test == NULL)
+    if (b == NULL || test == NULL)
     {
         Serial.println("DMA Allocation ERROR");
         while (true);
     }
-    for(int i = 0; i < 400; i++)
+    for(int i = 0; i < 800; i++)
     {
-        b[i] = 0;
+        b[i] = EOF;
     }
-    setI2S1pin(0, I2S1O_BCK_OUT_IDX, 1);
+    setI2S1pin(0, I2S1O_BCK_OUT_IDX, 0);
     setI2S1pin(4, I2S1O_DATA_OUT0_IDX, 0);
     setI2S1pin(5, I2S1O_DATA_OUT1_IDX, 0);
     setI2S1pin(18, I2S1O_DATA_OUT2_IDX, 0);
@@ -119,10 +126,10 @@ void Inkplate::begin(void)
     // Battery voltage Switch MOSFET
     pinModeInternal(MCP23017_INT_ADDR, mcpRegsInt, 9, OUTPUT);
   
-    D_memory_new = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
-    _partial = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 8);
-    _pBuffer = (uint8_t*) ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 4);
-    D_memory4Bit = (uint8_t*)ps_malloc(E_INK_WIDTH * E_INK_HEIGHT / 2);
+    D_memory_new = (uint8_t*)ps_malloc((E_INK_WIDTH + 1) * (E_INK_HEIGHT + 1) / 8);
+    _partial = (uint8_t*)ps_malloc((E_INK_WIDTH + 1) * (E_INK_HEIGHT + 1) / 8);
+    _pBuffer = (uint8_t*) ps_malloc((E_INK_WIDTH + 1) * (E_INK_HEIGHT + 1) / 4);
+    D_memory4Bit = (uint8_t*)ps_malloc((E_INK_WIDTH + 1) * (E_INK_HEIGHT + 1) / 2);
     GLUT = (uint8_t*)malloc(256 * 8);
     GLUT2 = (uint8_t*)malloc(256 * 8);
     if (D_memory_new == NULL || _partial == NULL || _pBuffer == NULL || D_memory4Bit == NULL)
@@ -195,14 +202,12 @@ void Inkplate::display() {
   if (_displayMode == 1) display3b();
 }
 
-void Inkplate::partialUpdate() {
+void Inkplate::partialUpdate(uint8_t _leaveOn) {
   if(_displayMode == 1) return;
   if(_blockPartial == 1) display1b();
   uint32_t _pos = (E_INK_WIDTH * E_INK_HEIGHT/8)-1;
-  uint8_t data;
   uint8_t diffw, diffb;
   uint32_t n = (E_INK_WIDTH * E_INK_HEIGHT/4)-1;
-  uint8_t dram;
   
    for (int i = 0; i < E_INK_HEIGHT; i++) {
       for (int j = 0; j < E_INK_WIDTH/8; j++) {
@@ -217,25 +222,28 @@ void Inkplate::partialUpdate() {
    }	  
    
   einkOn();
-  for (int k = 0; k < 5; k++) {
-    vscan_start();
-    n = (E_INK_WIDTH * E_INK_HEIGHT/4)-1;
-    for (int i = 0; i < E_INK_HEIGHT; i++) {
-		data = *(_pBuffer + n);
-		hscan_start(pinLUT[data]);
-		n--;
-      for (int j = 0; j < ((E_INK_WIDTH/4)-1); j++) {
-		data = *(_pBuffer + n);
-          GPIO.out_w1ts = (pinLUT[data]) | CL;
-          GPIO.out_w1tc = DATA | CL;
-		n--;
-      }
-	  GPIO.out_w1ts = CL;
-      GPIO.out_w1tc = DATA | CL;
-	  vscan_end();
+  myI2S->int_clr.val = myI2S->int_raw.val;
+    for (int k = 0; k < 7; ++k) {
+        _pos = (E_INK_HEIGHT * E_INK_WIDTH / 4);
+        vscan_start();
+        for (int i = 0; i < E_INK_HEIGHT; ++i) {
+            hscan_start();
+            for (int n = 0; n < (E_INK_WIDTH/4); n+=4) {
+                b[n] = *(_pBuffer + _pos - 2 - 1);//i + 2; And additionally -1? Why tho...
+                b[n + 1] = *(_pBuffer + _pos - 3 - 1); //i + 3;
+                b[n + 2] = *(_pBuffer + _pos - 1);//i;
+                b[n + 3] = *(_pBuffer + _pos - 1 - 1);//i + 1;
+                _pos-=4;
+            }
+            sendData();
+            while (!myI2S->int_raw.out_total_eof);
+            myI2S->int_clr.val = myI2S->int_raw.val;
+            myI2S->out_link.stop = 1;
+            myI2S->out_link.start = 0;
+            vscan_end();
+        }
+        //delayMicroseconds(230);
     }
-    delayMicroseconds(230);
-  }
   /*
     for (int k = 0; k < 1; k++) {
     vscan_start();
@@ -269,8 +277,8 @@ void Inkplate::partialUpdate() {
   */
   cleanFast(2, 2);
   cleanFast(3, 1);
-  vscan_start();
-  einkOff();
+  //vscan_start();
+  if (!_leaveOn) einkOff();
   for(int i = 0; i<(E_INK_WIDTH * E_INK_HEIGHT/8); i++) {
 	  *(D_memory_new+i) &= *(_partial+i);
 	  *(D_memory_new+i) |= (*(_partial+i));
@@ -673,17 +681,17 @@ void Inkplate::display1b() {
 	  *(D_memory_new+i) |= (*(_partial+i));
   }
   //uint32_t _rowBuffer[100];
-  uint32_t _pos;
+  uint8_t *_pos;
   //uint32_t _send;
   //uint8_t data;
   uint8_t dram1;
   uint8_t dram2;
   einkOn();
   cleanFast(0, 1);
-  cleanFast(1, 15);
-  cleanFast(0, 15);
-  cleanFast(1, 15);
-  cleanFast(0, 15);
+  cleanFast(1, 20);
+  cleanFast(0, 20);
+  cleanFast(1, 20);
+  cleanFast(0, 20);
   //test->size = 300;
   //test->length = 300;
   //test->sosf = 1;
@@ -693,14 +701,14 @@ void Inkplate::display1b() {
   //test->buf = b;
   //test->offset = 0;
   myI2S->int_clr.val = myI2S->int_raw.val;
-      for (int k = 0; k < 7; ++k) {
-        _pos = (E_INK_HEIGHT * E_INK_WIDTH / 8);
+  for (int k = 0; k < 6; k++) {
+        _pos = D_memory_new + (E_INK_HEIGHT * E_INK_WIDTH / 8);
         vscan_start();
         for (int i = 0; i < E_INK_HEIGHT; ++i) {
             hscan_start();
             for (int n = 0; n < (E_INK_WIDTH/4); n+=4) {
-                dram1 = *(D_memory_new + _pos);
-                dram2 = *(D_memory_new + _pos - 1);
+                dram1 = *(_pos - 1); //And additionally -1? Why tho...
+                dram2 = *(_pos - 2);
                 b[n] = LUTB[(dram2 >> 4) & 0x0F];//i + 2;
                 b[n + 1] = LUTB[dram2 & 0x0F]; //i + 3;
                 b[n + 2] = LUTB[(dram1 >> 4) & 0x0F];//i;
@@ -754,10 +762,10 @@ void Inkplate::display1b() {
 void Inkplate::display3b() {
   einkOn();
   cleanFast(0, 1);
-  cleanFast(1, 15);
-  cleanFast(0, 15);
-  cleanFast(1, 15);
-  cleanFast(0, 15);
+  cleanFast(1, 20);
+  cleanFast(0, 20);
+  cleanFast(1, 20);
+  cleanFast(0, 20);
   //test->size = 300;
   //test->length = 300;
   //test->sosf = 1;
@@ -1089,14 +1097,14 @@ uint16_t Inkplate::getPorts() {
 }
 
 //------------------------------------TEST - I2S1 PARALLEL------------------------------------
-void Inkplate::I2SInit()
+static void IRAM_ATTR I2SInit()
 {
   periph_module_enable(PERIPH_I2S1_MODULE);
   periph_module_reset(PERIPH_I2S1_MODULE);
     
   //fifo_reset
-  //myI2S->conf.rx_fifo_reset = 1;
-  //myI2S->conf.rx_fifo_reset = 0;
+  myI2S->conf.rx_fifo_reset = 1;
+  myI2S->conf.rx_fifo_reset = 0;
   myI2S->conf.tx_fifo_reset = 1;
   myI2S->conf.tx_fifo_reset = 0;
   
@@ -1107,9 +1115,9 @@ void Inkplate::I2SInit()
   myI2S->lc_conf.out_rst = 0;
   
   //i2s reset
-  //myI2S->conf.rx_reset=1;
+  myI2S->conf.rx_reset=1;
   myI2S->conf.tx_reset=1;
-  //myI2S->conf.rx_reset=0;
+  myI2S->conf.rx_reset=0;
   myI2S->conf.tx_reset=0;
   
   //Set LCD mode on I2S, setup delays on SD and WR lines (form 1)
@@ -1119,25 +1127,26 @@ void Inkplate::I2SInit()
   myI2S->conf2.lcd_tx_sdx2_en = 0;
   
   myI2S->sample_rate_conf.val = 0;
-  //myI2S->sample_rate_conf.rx_bits_mod = 8;
+  myI2S->sample_rate_conf.rx_bits_mod = 8;
   myI2S->sample_rate_conf.tx_bits_mod = 8;
-  //myI2S->sample_rate_conf.rx_bck_div_num = 2;
+  myI2S->sample_rate_conf.rx_bck_div_num = 2;
   myI2S->sample_rate_conf.tx_bck_div_num = 2;
   
+  //rtc_clk_apll_enable(1, 0, 0, 8, 0);
+
   myI2S->clkm_conf.val = 0;
   myI2S->clkm_conf.clka_en = 0;
   myI2S->clkm_conf.clkm_div_b = 0;
   myI2S->clkm_conf.clkm_div_a = 1;
   //myI2S->clkm_conf.clk_en = 1;
-  
-  myI2S->clkm_conf.clkm_div_num = 1;
+  myI2S->clkm_conf.clkm_div_num = 4;
   
   myI2S->fifo_conf.val = 0;
-  //myI2S->fifo_conf.rx_fifo_mod_force_en = 1;
+  myI2S->fifo_conf.rx_fifo_mod_force_en = 1;
   myI2S->fifo_conf.tx_fifo_mod_force_en = 1;
   myI2S->fifo_conf.tx_fifo_mod = 1;  //byte packing 0A0B_0B0C = 0, 0A0B_0C0D = 1, 0A00_0B00 = 3. Use dual mono single data
-  //myI2S->fifo_conf.rx_data_num = 32;
-  myI2S->fifo_conf.tx_data_num = 32;
+  myI2S->fifo_conf.rx_data_num = 1;
+  myI2S->fifo_conf.tx_data_num = 1;
   myI2S->fifo_conf.dscr_en = 1;
   
   myI2S->conf1.val = 0;
@@ -1146,10 +1155,10 @@ void Inkplate::I2SInit()
   
   myI2S->conf_chan.val = 0;
   myI2S->conf_chan.tx_chan_mod = 1;
-  //myI2S->conf_chan.rx_chan_mod = 1;
+  myI2S->conf_chan.rx_chan_mod = 1;
   
   myI2S->conf.tx_right_first = 0; //!!invert_clk; // should be false / 0
-  //myI2S->conf.rx_right_first = 0; //!!invert_clk;
+  myI2S->conf.rx_right_first = 0; //!!invert_clk;
   
   myI2S->timing.val = 0;
   
@@ -1157,6 +1166,7 @@ void Inkplate::I2SInit()
 
 void Inkplate::I2SInitOLD()
 {
+  /*
   periph_module_enable(PERIPH_I2S1_MODULE);
   DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_I2S1_CLK_EN);
   DPORT_SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN_REG, DPORT_I2S1_CLK_EN);
@@ -1236,6 +1246,7 @@ void Inkplate::I2SInitOLD()
 
   myI2S->int_ena.val = 0;
   myI2S->int_clr.val = myI2S->int_raw.val;
+  */
 }
 
 static void IRAM_ATTR sendData()
@@ -1273,7 +1284,7 @@ static void IRAM_ATTR sendData()
   //myI2S->conf.rx_reset=0;
   myI2S->conf.tx_reset=0;
   
-  //myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
+  myI2S->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN | I2S_OUT_DATA_BURST_EN;
   myI2S->out_link.addr = (uint32_t)(test) & 0x000FFFFF;
   //myI2S->out_link.stop = 0;
   myI2S->out_link.start = 1;
@@ -1297,8 +1308,8 @@ void Inkplate::setI2S1pin(uint32_t _pin, uint32_t _function, uint32_t _inv)
 {
   const uint32_t io_mux[] = {IO_MUX_GPIO0_REG, IO_MUX_GPIO1_REG, IO_MUX_GPIO2_REG, IO_MUX_GPIO3_REG, IO_MUX_GPIO4_REG, IO_MUX_GPIO5_REG, IO_MUX_GPIO6_REG, IO_MUX_GPIO7_REG, IO_MUX_GPIO8_REG,
                              IO_MUX_GPIO9_REG, IO_MUX_GPIO10_REG, IO_MUX_GPIO11_REG, IO_MUX_GPIO12_REG, IO_MUX_GPIO13_REG, IO_MUX_GPIO14_REG, IO_MUX_GPIO15_REG, IO_MUX_GPIO16_REG, IO_MUX_GPIO17_REG, IO_MUX_GPIO18_REG,
-                             IO_MUX_GPIO19_REG, IO_MUX_GPIO20_REG, IO_MUX_GPIO21_REG, IO_MUX_GPIO22_REG, IO_MUX_GPIO23_REG, IO_MUX_GPIO24_REG, IO_MUX_GPIO25_REG, IO_MUX_GPIO26_REG, IO_MUX_GPIO27_REG, -1,
-                             -1, -1, -1, IO_MUX_GPIO32_REG, IO_MUX_GPIO33_REG, IO_MUX_GPIO34_REG, IO_MUX_GPIO35_REG, IO_MUX_GPIO36_REG, IO_MUX_GPIO37_REG, IO_MUX_GPIO38_REG,
+                             IO_MUX_GPIO19_REG, IO_MUX_GPIO20_REG, IO_MUX_GPIO21_REG, IO_MUX_GPIO22_REG, IO_MUX_GPIO23_REG, IO_MUX_GPIO24_REG, IO_MUX_GPIO25_REG, IO_MUX_GPIO26_REG, IO_MUX_GPIO27_REG, 0,
+                             0, 0, 0, IO_MUX_GPIO32_REG, IO_MUX_GPIO33_REG, IO_MUX_GPIO34_REG, IO_MUX_GPIO35_REG, IO_MUX_GPIO36_REG, IO_MUX_GPIO37_REG, IO_MUX_GPIO38_REG,
                              IO_MUX_GPIO39_REG
                             };
   if (io_mux[_pin] == -1) return;

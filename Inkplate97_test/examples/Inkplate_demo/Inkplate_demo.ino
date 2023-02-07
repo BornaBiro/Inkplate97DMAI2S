@@ -5,11 +5,11 @@
 //Otherwise this example won't compile or won't work properly!
 //--------------------------------------------------------------------------------------
 
-#include <Inkplate97.h>
+#include <Inkplate97_test.h>
 #include "image1.h"
 #include "image2.h"
 #include "picture1.h"
-#include "picture2.h" https://www.canva.com/photos/MADGwF-1B54-grayscale-photography-of-concrete-buildings/
+#include "picture2.h" //https://www.canva.com/photos/MADGwF-1B54-grayscale-photography-of-concrete-buildings/
 #include "picture3.h"
 #include "picture4.h"
 #include "picture5.h"
