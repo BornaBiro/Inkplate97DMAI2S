@@ -134,7 +134,7 @@ NOTE: This library is still heavily in progress, so there is still some bugs. Us
 
 extern SPIClass spi2;
 extern SdFat sd;
-static void IRAM_ATTR sendData();
+static void IRAM_ATTR sendData(uint32_t *_d, int _n);
 static void IRAM_ATTR I2SInit();
 static uint8_t *b;
 static uint8_t *c;
